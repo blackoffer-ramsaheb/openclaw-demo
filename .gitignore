@@ -1,0 +1,5 @@
+openclaw/
+minimal-demo/node_modules/
+minimal-demo/.env
+minimal-demo/notes/
+.DS_Store

@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-minimal-demo",
+  "version": "1.0.0",
+  "description": "Minimal OpenClaw-inspired local note-taking and file-search AI agent using Ollama",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

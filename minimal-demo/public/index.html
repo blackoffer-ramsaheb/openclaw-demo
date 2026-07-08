@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw Mini — Local AI Agent Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="glass-bg"></div>
+  
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-emoji">🦞</span>
+        <div class="logo-text">
+          <h1>OpenClaw <span class="logo-badge">Mini</span></h1>
+          <p>Local Note & File Agent</p>
+        </div>
+      </div>
+      
+      <div class="status-panel" id="statusPanel">
+        <div class="status-indicator offline" id="statusIndicator"></div>
+        <span class="status-text" id="statusText">Checking Ollama connection...</span>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="app-workspace">
+      <!-- Left: Chat Section -->
+      <section class="panel chat-panel">
+        <div class="panel-header">
+          <h2>💬 Agent Chat</h2>
+          <button class="btn btn-clear-chat" id="btnClearChat" title="Clear chat history">Clear</button>
+        </div>
+        
+        <div class="chat-history" id="chatHistory">
+          <div class="message assistant">
+            <div class="message-bubble">
+              Hi! I am <strong>OpenClaw Mini</strong>, your local AI agent. I run entirely on your PC using your local <strong>Ollama (phi3:mini)</strong> model.
+              <br><br>
+              I can manage your notes and search files! Try typing:
+              <ul>
+                <li><code>Create a note called tasks with buy bread and milk</code></li>
+                <li><code>List all my notes</code></li>
+                <li><code>Read the tasks note</code></li>
+                <li><code>Search files for welcome</code></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div class="chat-suggestions" id="chatSuggestions">
+          <button class="suggestion-tag">List all notes</button>
+          <button class="suggestion-tag">Search files for "welcome"</button>
+          <button class="suggestion-tag">Create note: reminder</button>
+        </div>
+
+        <div class="chat-input-area">
+          <textarea id="chatInput" placeholder="Ask your agent to do something..." rows="1"></textarea>
+          <button class="btn btn-send" id="btnSend">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path fill="currentColor" d="M2,21L23,12L2,3V10L17,12L2,14V21Z" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- Right: Dashboard / Tools Section -->
+      <section class="panel dashboard-panel">
+        <div class="tab-header">
+          <button class="tab-btn active" data-tab="notesTab">📁 Local Notes</button>
+          <button class="tab-btn" data-tab="searchTab">🔍 Workspace Search</button>
+        </div>
+
+        <!-- Notes Tab Contents -->
+        <div class="tab-content active" id="notesTab">
+          <div class="notes-controls">
+            <input type="text" id="noteTitleInput" placeholder="New note title...">
+            <button class="btn btn-primary" id="btnCreateNote">Create Note</button>
+          </div>
+          <div class="notes-split">
+            <!-- Notes list -->
+            <div class="notes-list" id="notesList">
+              <div class="loading-spinner">Loading notes...</div>
+            </div>
+            <!-- Note Editor/Viewer -->
+            <div class="note-viewer empty" id="noteViewer">
+              <div class="viewer-placeholder">
+                <span class="viewer-icon">📝</span>
+                <p>Select a note from the list or ask the agent to create one to edit and view its contents.</p>
+              </div>
+              <div class="viewer-content hidden" id="viewerContent">
+                <div class="viewer-header">
+                  <h3 id="currentNoteTitle">Note Name</h3>
+                  <div class="viewer-actions">
+                    <button class="btn btn-success btn-sm" id="btnSaveNote">Save Changes</button>
+                    <button class="btn btn-danger btn-sm" id="btnDeleteNote">Delete</button>
+                  </div>
+                </div>
+                <textarea id="noteBodyEditor" placeholder="Write something..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search Tab Contents -->
+        <div class="tab-content" id="searchTab">
+          <div class="search-controls">
+            <input type="text" id="searchInput" placeholder="Search filenames or keywords in code...">
+            <button class="btn btn-primary" id="btnSearch">Search Files</button>
+          </div>
+          <div class="search-results-container">
+            <div class="search-info" id="searchInfo">Enter a search keyword above or ask the agent to search files.</div>
+            <div class="search-results" id="searchResults"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
