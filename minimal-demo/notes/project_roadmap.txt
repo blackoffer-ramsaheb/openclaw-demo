@@ -1,0 +1,14 @@
+Project: OpenClaw Mini Deployment & Scaling
+Status: Active (Phase 2)
+Owner: Engineering Team
+
+Milestones:
+[x] Milestone 1: Zero-overhead Express server setup with Ollama integration
+[x] Milestone 2: Native file search & CRUD note tools via ReAct agent loop
+[ ] Milestone 3: Webhook event triggers for automated notes synchronization
+[ ] Milestone 4: Multi-channel chat integration (Telegram / Discord bridge)
+[ ] Milestone 5: Local vector embedding caching for instant semantic search
+
+Key Deliverables:
+- Zero dependency bloat (Node 20 compatible, ~25MB memory footprint)
+- 100% on-premise execution with no cloud subscription costs

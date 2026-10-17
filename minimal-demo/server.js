@@ -1,4 +1,5 @@
 import express from "express";
+import os from "os";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -8,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const OLLAMA_HOST = "http://localhost:11434";
+const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 const DEFAULT_MODEL = "phi3:mini";
 
 app.use(express.json());
@@ -64,6 +65,47 @@ function removeNoteFile(name) {
   }
   fs.unlinkSync(filePath);
   return { success: true };
+}
+
+function appendNoteContent(name, text) {
+  const safeName = path.basename(name).replace(/\.txt$/, "") + ".txt";
+  const filePath = path.join(NOTES_DIR, safeName);
+  let existing = "";
+  if (fs.existsSync(filePath)) {
+    existing = fs.readFileSync(filePath, "utf8");
+    if (existing && !existing.endsWith("\n")) existing += "\n";
+  }
+  const updated = existing + text;
+  fs.writeFileSync(filePath, updated, "utf8");
+  return { success: true, name: safeName.replace(".txt", ""), content: updated };
+}
+
+function getAllNotesText() {
+  const notes = getNotesList();
+  if (notes.length === 0) return "No notes available.";
+  return notes.map(n => {
+    try {
+      const content = readNoteContent(n.name);
+      return `--- Note: ${n.name} ---\n${content}`;
+    } catch (e) {
+      return `--- Note: ${n.name} (unreadable) ---`;
+    }
+  }).join("\n\n");
+}
+
+function getSystemMetrics() {
+  const totalMem = Math.round(os.totalmem() / (1024 * 1024 * 1024) * 10) / 10;
+  const freeMem = Math.round(os.freemem() / (1024 * 1024 * 1024) * 10) / 10;
+  const usedMem = Math.round((totalMem - freeMem) * 10) / 10;
+  const procMem = Math.round(process.memoryUsage().rss / (1024 * 1024) * 10) / 10;
+  return {
+    platform: `${os.type()} (${os.arch()})`,
+    nodeVersion: process.version,
+    serverMemoryRSS: `${procMem} MB`,
+    systemRAM: `${usedMem} GB used / ${totalMem} GB total (${freeMem} GB free)`,
+    uptimeSeconds: Math.round(process.uptime()),
+    cpuCores: os.cpus().length
+  };
 }
 
 // File Search Helper (ignores node_modules, .git, .agents)
@@ -168,9 +210,21 @@ function executeTool(action, args) {
         const res = writeNoteContent(args.name, args.content);
         return JSON.stringify({ success: true, message: `Created/updated note '${res.name}'` });
       }
+      case "appendNote": {
+        const res = appendNoteContent(args.name, args.content || "");
+        return JSON.stringify({ success: true, message: `Appended content to note '${res.name}'` });
+      }
       case "deleteNote": {
         removeNoteFile(args.name);
         return JSON.stringify({ success: true, message: `Deleted note '${args.name}'` });
+      }
+      case "summarizeAllNotes": {
+        const allText = getAllNotesText();
+        return JSON.stringify({ success: true, allNotesOverview: allText });
+      }
+      case "getSystemStats": {
+        const stats = getSystemMetrics();
+        return JSON.stringify({ success: true, systemStats: stats });
       }
       case "searchFiles": {
         const files = searchLocalFiles(args.query);
@@ -187,6 +241,10 @@ function executeTool(action, args) {
 // -----------------------------------------------------------------------------
 // REST API Routes
 // -----------------------------------------------------------------------------
+
+app.get("/api/system", (req, res) => {
+  res.json(getSystemMetrics());
+});
 
 app.get("/api/config", async (req, res) => {
   let ollamaConnected = false;
@@ -228,6 +286,49 @@ app.get("/api/search", (req, res) => {
   res.json(searchLocalFiles(req.query.q || ""));
 });
 
+function formatToolSummary(action, rawOutput) {
+  try {
+    const data = JSON.parse(rawOutput);
+    switch (action) {
+      case "getSystemStats": {
+        const s = data.systemStats;
+        return `⚡ **System Health & Resources:**\n` +
+               `• **Platform:** ${s.platform}\n` +
+               `• **Node Version:** ${s.nodeVersion}\n` +
+               `• **System RAM:** ${s.systemRAM}\n` +
+               `• **Server Memory (RSS):** ${s.serverMemoryRSS} (zero bloat)\n` +
+               `• **CPU Cores:** ${s.cpuCores}\n` +
+               `• **Uptime:** ${s.uptimeSeconds} seconds`;
+      }
+      case "listNotes": {
+        if (!data.notes || data.notes.length === 0) return "You currently have no notes in `./notes`. Ask me to create one!";
+        const list = data.notes.map(n => `• **${n.name}** (${n.size} bytes)`).join("\n");
+        return `📁 **Local Notes in Workspace (${data.notes.length}):**\n${list}`;
+      }
+      case "readNote": {
+        return `📄 **Note: ${data.name}**\n\n${data.content}`;
+      }
+      case "createNote":
+      case "appendNote":
+      case "deleteNote": {
+        return `✅ ${data.message || "Action completed successfully."}`;
+      }
+      case "searchFiles": {
+        if (!data.files || data.files.length === 0) return `🔍 No matching files found in the workspace for that query.`;
+        const list = data.files.map(f => `• **${f.name}** (${f.path}) [${f.matchType}]${f.snippet ? `\n  > ${f.snippet}` : ''}`).join("\n");
+        return `🔍 **Found ${data.files.length} matching file(s):**\n${list}`;
+      }
+      case "summarizeAllNotes": {
+        return `📋 **Executive Notes Overview:**\n\n${data.allNotesOverview}`;
+      }
+      default:
+        return `Executed ${action}: ${rawOutput}`;
+    }
+  } catch (e) {
+    return `Action '${action}' executed: ${rawOutput}`;
+  }
+}
+
 // Agent Chat route utilizing ReAct with Ollama
 app.post("/api/chat", async (req, res) => {
   const { message, history = [] } = req.body;
@@ -242,22 +343,30 @@ app.post("/api/chat", async (req, res) => {
     `- List notes: {"action": "listNotes"}\n` +
     `- Read a note: {"action": "readNote", "name": "note_name"}\n` +
     `- Create note: {"action": "createNote", "name": "note_name", "content": "text content here"}\n` +
+    `- Append note: {"action": "appendNote", "name": "note_name", "content": "text to append"}\n` +
     `- Delete note: {"action": "deleteNote", "name": "note_name"}\n` +
+    `- Summarize all notes: {"action": "summarizeAllNotes"}\n` +
+    `- System health & stats: {"action": "getSystemStats"}\n` +
     `- Search files: {"action": "searchFiles", "query": "search query"}\n\n` +
     `INSTRUCTIONS:\n` +
-    `1. If the user asks you to list notes, create/write a note, read a note, delete a note, or search files, you MUST output ONLY the corresponding JSON action block, e.g. {"action": "listNotes"}\n` +
+    `1. If the user asks you to list notes, create/write/append a note, read a note, delete a note, summarize all notes, check system stats/RAM, or search files, you MUST output ONLY the corresponding JSON action block.\n` +
     `2. Do not explain your action if you are outputting the JSON action.\n` +
-    `3. If you are just answering a question, summarizing, or conversing, speak normally and do not output any JSON.\n\n` +
+    `3. If you are just answering a question or conversing, speak normally and do not output any JSON.\n\n` +
     `EXAMPLES:\n` +
     `User: list notes\n` +
     `Assistant: {"action": "listNotes"}\n` +
-    `User: search for welcome\n` +
-    `Assistant: {"action": "searchFiles", "query": "welcome"}\n` +
+    `User: summarize all my notes\n` +
+    `Assistant: {"action": "summarizeAllNotes"}\n` +
+    `User: how is my system or ram?\n` +
+    `Assistant: {"action": "getSystemStats"}\n` +
+    `User: add buy milk to checklist\n` +
+    `Assistant: {"action": "appendNote", "name": "checklist", "content": "- [ ] Buy milk"}\n` +
+    `User: search for express\n` +
+    `Assistant: {"action": "searchFiles", "query": "express"}\n` +
     `User: write a note called todo with buy milk\n` +
     `Assistant: {"action": "createNote", "name": "todo", "content": "buy milk"}`;
 
   try {
-    // Construct prompt history for Ollama
     const messages = [
       { role: "system", content: systemInstruction }
     ];
@@ -277,7 +386,8 @@ app.post("/api/chat", async (req, res) => {
         messages: messages,
         stream: false,
         options: { temperature: 0.1 }
-      })
+      }),
+      signal: AbortSignal.timeout(60000)
     });
 
     if (!ollamaResponse.ok) {
@@ -304,31 +414,42 @@ app.post("/api/chat", async (req, res) => {
     // Execute the action if found
     if (actionFound && actionFound.action) {
       const toolOutput = executeTool(actionFound.action, actionFound);
-      
-      // Feed the tool output back into the conversation to generate a conversational response
-      const followUpMessages = [
-        ...messages,
-        { role: "assistant", content: JSON.stringify(actionFound) },
-        { role: "system", content: `Tool execution result: ${toolOutput}. State this result clearly to the user in a short friendly summary. Do not output any more JSON.` }
-      ];
+      const fallbackReply = formatToolSummary(actionFound.action, toolOutput);
 
-      const followUpResponse = await fetch(`${OLLAMA_HOST}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: model,
-          messages: followUpMessages,
-          stream: false,
-          options: { temperature: 0.2 }
-        })
-      });
+      // Fast-path for instant response tools (health stats, search, read, list)
+      if (["getSystemStats", "searchFiles", "readNote", "listNotes"].includes(actionFound.action)) {
+        return res.json({ response: fallbackReply });
+      }
 
-      if (followUpResponse.ok) {
-        const followUpData = await followUpResponse.json();
-        replyText = followUpData.message?.content || "";
-        console.log(`[Agent Final Output]: ${replyText}`);
-      } else {
-        replyText = `I executed the action '${actionFound.action}' successfully: ${toolOutput}`;
+      // Try AI summary for creative actions with a 20s timeout
+      try {
+        const followUpMessages = [
+          ...messages,
+          { role: "assistant", content: JSON.stringify(actionFound) },
+          { role: "system", content: `Tool execution result: ${toolOutput}. State this result clearly to the user in a short friendly summary. Do not output any more JSON.` }
+        ];
+
+        const followUpResponse = await fetch(`${OLLAMA_HOST}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: model,
+            messages: followUpMessages,
+            stream: false,
+            options: { temperature: 0.2 }
+          }),
+          signal: AbortSignal.timeout(20000)
+        });
+
+        if (followUpResponse.ok) {
+          const followUpData = await followUpResponse.json();
+          replyText = followUpData.message?.content || fallbackReply;
+        } else {
+          replyText = fallbackReply;
+        }
+      } catch (err) {
+        console.log("Follow-up AI formatting timed out, using instant formatted fallback");
+        replyText = fallbackReply;
       }
     }
 
@@ -336,7 +457,7 @@ app.post("/api/chat", async (req, res) => {
   } catch (err) {
     console.error("Ollama communication failure:", err);
     res.status(500).json({ 
-      error: `Could not connect to Ollama (host: ${OLLAMA_HOST}). Make sure you ran 'ollama run phi3:mini' first. Error: ${err.message}` 
+      error: `Could not connect to Ollama (host: ${OLLAMA_HOST}). Make sure Ollama is running ('ollama serve' or 'ollama run qwen3:4b'). Error: ${err.message}` 
     });
   }
 });

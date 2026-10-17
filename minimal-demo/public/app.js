@@ -378,16 +378,9 @@ chatSuggestions.addEventListener("click", (e) => {
   const tag = e.target.closest(".suggestion-tag");
   if (!tag) return;
   
-  const text = tag.innerText;
-  if (text.startsWith("Create note:")) {
-    chatInput.value = "Create a note called reminder with buy milk and bread at 5pm";
-  } else if (text.includes("welcome")) {
-    chatInput.value = "Search files for welcome";
-  } else {
-    chatInput.value = text;
-  }
+  const prompt = tag.getAttribute("data-prompt") || tag.innerText;
+  chatInput.value = prompt;
   chatInput.focus();
-  // Auto-grow textarea
   chatInput.dispatchEvent(new Event("input"));
 });
 
@@ -418,4 +411,8 @@ function init() {
   setInterval(checkConnection, 10000);
 }
 
-window.addEventListener("DOMContentLoaded", init);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

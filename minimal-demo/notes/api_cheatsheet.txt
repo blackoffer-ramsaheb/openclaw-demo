@@ -1,0 +1,25 @@
+OpenClaw Mini REST API Cheatsheet:
+
+1. Config & Status:
+   GET /api/config
+   Returns: { "ollamaConnected": true, "modelName": "qwen3:4b" }
+
+2. List Notes:
+   GET /api/notes
+   Returns: Array of note objects with filename, size, and updatedAt.
+
+3. Read Note:
+   GET /api/notes/:name
+   Returns: { "name": "welcome", "content": "..." }
+
+4. Create/Update Note:
+   POST /api/notes
+   Body: { "name": "todo", "content": "milk, eggs" }
+
+5. Search Workspace Files:
+   GET /api/search?q=keyword
+   Returns: Array of matching filenames and text snippets.
+
+6. Agent Conversational ReAct:
+   POST /api/chat
+   Body: { "message": "Search files for server", "history": [] }

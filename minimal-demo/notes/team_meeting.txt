@@ -1,0 +1,13 @@
+Date: October 17, 2026
+Topic: Local Agent POC & Desktop Optimization
+Attendees: Alex, Sarah, Dev Team
+
+Discussion Points:
+1. Replaced heavy monorepo build with standalone OpenClaw Mini architecture.
+2. Verified local Ollama phi3:mini / qwen3:4b latency under 350ms.
+3. System overhead reduced from 8GB RAM build spikes down to ~25MB idle memory.
+
+Action Items:
+- [ ] Sarah: Test file search queries across 1,000+ code files.
+- [ ] Alex: Verify ReAct JSON loop handles edge cases gracefully.
+- [ ] Team: Review documentation and prepare demo presentation video.

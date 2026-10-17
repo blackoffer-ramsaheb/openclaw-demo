@@ -1,0 +1,3 @@
+Welcome to OpenClaw Minimal Demo!
+
+This note is stored locally on your PC. You can use the AI Agent to search, edit, or delete notes.
