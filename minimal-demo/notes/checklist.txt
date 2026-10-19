@@ -2,3 +2,4 @@ buy milk
 eggs
 bread
 finish the assignment
+- [ ] Review PR #42

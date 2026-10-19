@@ -311,12 +311,28 @@ body {
 }
 
 .message-bubble code {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.85em;
-  color: #cbd5e1;
+  font-family: 'Consolas', monospace;
+  font-size: 0.88em;
+  color: #a5b4fc;
+}
+
+.message-bubble pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.message-bubble pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: #e2e8f0;
 }
 
 .message-bubble ul {

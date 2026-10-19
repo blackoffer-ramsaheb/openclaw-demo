@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-const DEFAULT_MODEL = "phi3:mini";
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || "qwen3:4b";
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -24,6 +24,7 @@ if (!fs.existsSync(NOTES_DIR)) {
     "Welcome to OpenClaw Minimal Demo!\n\nThis note is stored locally on your PC. You can use the AI Agent to search, edit, or delete notes."
   );
 }
+
 
 // -----------------------------------------------------------------------------
 // Note helpers
@@ -177,20 +178,58 @@ function searchLocalFiles(query, baseDir = __dirname) {
 // Ollama API Helpers
 // -----------------------------------------------------------------------------
 async function getRunningModel() {
+  if (process.env.OLLAMA_MODEL) {
+    return process.env.OLLAMA_MODEL;
+  }
   try {
-    const res = await fetch(`${OLLAMA_HOST}/api/tags`);
+    // 1. Check if any model is currently loaded in memory (/api/ps)
+    try {
+      const psRes = await fetch(`${OLLAMA_HOST}/api/ps`, { signal: AbortSignal.timeout(2000) });
+      if (psRes.ok) {
+        const psData = await psRes.json();
+        if (psData.models && psData.models.length > 0) {
+          return psData.models[0].name;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Query available local models (/api/tags)
+    const res = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       const data = await res.json();
       const models = data.models || [];
-      // Find a model matching phi3:mini, phi3, or default to the first loaded model
-      const found = models.find(m => m.name.toLowerCase().includes("phi3") || m.name.toLowerCase().includes("phi-3"));
-      if (found) return found.name;
+      // Prefer models matching qwen, phi3, or llama
+      const preferred = models.find(m => {
+        const n = m.name.toLowerCase();
+        return n.includes("qwen") || n.includes("phi3") || n.includes("phi-3") || n.includes("llama");
+      });
+      if (preferred) return preferred.name;
       if (models.length > 0) return models[0].name;
     }
   } catch (e) {
     console.log("Could not query Ollama models list, using default:", DEFAULT_MODEL);
   }
   return DEFAULT_MODEL;
+}
+
+// Robust JSON action extractor from model output (handles code fences and raw JSON)
+function extractActionJson(text) {
+  if (!text) return null;
+  // Try markdown code block first
+  const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?"action"[\s\S]*?\})\s*```/i);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1]);
+    } catch (_) {}
+  }
+  // Try raw JSON action object
+  const rawMatch = text.match(/\{[\s\S]*?"action"\s*:\s*"[^"]+"[\s\S]*?\}/);
+  if (rawMatch) {
+    try {
+      return JSON.parse(rawMatch[0]);
+    } catch (_) {}
+  }
+  return null;
 }
 
 // Execute a tool and return structured string
@@ -398,18 +437,13 @@ app.post("/api/chat", async (req, res) => {
     let replyText = data.message?.content || "";
     console.log(`[Agent Raw Output]: ${replyText}`);
 
-    // Parse for JSON actions
-    let actionFound = null;
-    const jsonRegex = /\{"action"\s*:\s*"[^"]+".*?\}/s;
-    const match = replyText.match(jsonRegex);
-
-    if (match) {
-      try {
-        actionFound = JSON.parse(match[0]);
-      } catch (err) {
-        console.error("Failed to parse agent JSON match:", match[0], err);
-      }
+    // If model output contains reasoning <think>...</think> tags, strip them for clean UI & action detection
+    if (replyText.includes("<think>")) {
+      replyText = replyText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
     }
+
+    // Parse for JSON actions using robust parser
+    const actionFound = extractActionJson(replyText);
 
     // Execute the action if found
     if (actionFound && actionFound.action) {
@@ -443,7 +477,11 @@ app.post("/api/chat", async (req, res) => {
 
         if (followUpResponse.ok) {
           const followUpData = await followUpResponse.json();
-          replyText = followUpData.message?.content || fallbackReply;
+          let followUpContent = followUpData.message?.content || fallbackReply;
+          if (followUpContent.includes("<think>")) {
+            followUpContent = followUpContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+          }
+          replyText = followUpContent || fallbackReply;
         } else {
           replyText = fallbackReply;
         }

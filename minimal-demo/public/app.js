@@ -47,7 +47,7 @@ async function checkConnection() {
         statusPanel.style.borderColor = "rgba(16, 185, 129, 0.3)";
       } else {
         statusIndicator.className = "status-indicator offline";
-        statusText.innerHTML = `Ollama Offline (Phi-3 Not Found)`;
+        statusText.innerHTML = `Ollama Offline (No Model Connected)`;
         statusPanel.style.borderColor = "rgba(239, 68, 68, 0.3)";
       }
     }
@@ -338,12 +338,27 @@ function appendChatMessage(role, htmlContent) {
 
 // Simple text formatter for agent's markdown response
 function formatAgentText(text) {
-  // Convert code blocks
-  let formatted = text.replace(/`([^`]+)`/g, "<code>$1</code>");
-  // Convert double-asterisk bold
+  if (!text) return "";
+  // Escape raw HTML characters to prevent XSS
+  let formatted = escapeHtml(text);
+
+  // Convert multi-line code blocks ```code```
+  formatted = formatted.replace(/```(?:[a-zA-Z0-9_-]+)?\n?([\s\S]*?)```/g, (match, code) => {
+    return `<pre><code>${code.trim()}</code></pre>`;
+  });
+
+  // Convert inline code `code`
+  formatted = formatted.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Convert double-asterisk bold **bold**
   formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  // Convert newlines to breaks
+
+  // Convert bullet lists
+  formatted = formatted.replace(/(?:^|\n)\s*[-*•]\s+(.+)/g, "<br>• $1");
+
+  // Convert remaining newlines to breaks
   formatted = formatted.replace(/\n/g, "<br>");
+
   return formatted;
 }
 
